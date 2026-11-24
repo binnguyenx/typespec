@@ -4998,3 +4998,55 @@ def test_eq_nested_models():
         optional_myself=OptionalModel(optional_str="inner"),
     )
     assert model1 != model2_different_pet
+
+
+class _DatesModel(Model):
+    dates: list[datetime.datetime] = rest_field()
+
+
+_OLD_DATE = "2020-01-01T00:00:00Z"
+_NEW_DATE = "2021-06-01T00:00:00Z"
+_NEW_DATETIME = datetime.datetime(2021, 6, 1, tzinfo=datetime.timezone.utc)
+
+
+def _dates_model_after_property_read() -> _DatesModel:
+    model = _DatesModel({"dates": [_OLD_DATE]})
+    assert model.dates == [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    return model
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(lambda m: m.update({"dates": [_NEW_DATE]}), id="update-mapping"),
+        pytest.param(lambda m: m.update([("dates", [_NEW_DATE])]), id="update-pairs"),
+        pytest.param(lambda m: m.update(dates=[_NEW_DATE]), id="update-kwargs"),
+        pytest.param(lambda m: (m.__delitem__("dates"), m.update({"dates": [_NEW_DATE]})), id="del-then-update"),
+        pytest.param(lambda m: (m.pop("dates"), m.setdefault("dates", [_NEW_DATE])), id="pop-then-setdefault"),
+        pytest.param(lambda m: (m.popitem(), m.update({"dates": [_NEW_DATE]})), id="popitem-then-update"),
+        pytest.param(lambda m: (m.clear(), m.update({"dates": [_NEW_DATE]})), id="clear-then-update"),
+    ],
+)
+def test_mapping_mutation_after_property_read_is_deserialized(mutate):
+    """Values written through mapping methods after a property read must still be deserialized."""
+    model = _dates_model_after_property_read()
+    mutate(model)
+    assert model.dates == [_NEW_DATETIME]
+    assert all(isinstance(d, datetime.datetime) for d in model.dates)
+
+
+def test_setdefault_on_existing_key_keeps_deserialized_value():
+    model = _dates_model_after_property_read()
+    cached = model.dates
+    model.setdefault("dates", [_NEW_DATE])
+    assert model.dates is cached
+
+
+def test_update_keeps_dict_update_semantics():
+    class TwoFields(Model):
+        a: str = rest_field()
+        b: str = rest_field()
+
+    model = TwoFields(a="1")
+    model.update([("a", "2")], b="3")
+    assert model.as_dict() == {"a": "2", "b": "3"}

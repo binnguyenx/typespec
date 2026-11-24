@@ -463,16 +463,30 @@ class _MyMutableMapping(MutableMapping[str, typing.Any]):
                         return serialized
         return self._data.__getitem__(key)
 
-    def __setitem__(self, key: str, value: typing.Any) -> None:
-        # Clear any cached deserialized value when setting through dictionary access
-        cache_attr = f"_deserialized_{key}"
+    def _clear_deserialized_cache(self, key: typing.Optional[str] = None) -> None:
+        """Forget that a field's value in ``_data`` was deserialized in place by property access.
+
+        Must be called whenever ``_data`` changes through mapping access, otherwise the next
+        property read returns the raw value without deserializing it.
+
+        :param str key: The rest name of the field to reset. If not given, every field is reset.
+        """
+        if key is None:
+            for cache_attr in [a for a in self.__dict__ if a.startswith("_deserialized_")]:
+                object.__delattr__(self, cache_attr)
+            return
         try:
-            object.__delattr__(self, cache_attr)
+            object.__delattr__(self, f"_deserialized_{key}")
         except AttributeError:
             pass
+
+    def __setitem__(self, key: str, value: typing.Any) -> None:
+        # Clear any cached deserialized value when setting through dictionary access
+        self._clear_deserialized_cache(key)
         self._data.__setitem__(key, value)
 
     def __delitem__(self, key: str) -> None:
+        self._clear_deserialized_cache(key)
         self._data.__delitem__(key)
 
     def __iter__(self) -> typing.Iterator[typing.Any]:
@@ -536,6 +550,7 @@ class _MyMutableMapping(MutableMapping[str, typing.Any]):
         :rtype: any
         :raises KeyError: If key is not found and default is not given.
         """
+        self._clear_deserialized_cache(key)
         if default is _UNSET:
             return self._data.pop(key)
         return self._data.pop(key, default)
@@ -547,12 +562,15 @@ class _MyMutableMapping(MutableMapping[str, typing.Any]):
         :rtype: tuple
         :raises KeyError: if the dictionary is empty.
         """
-        return self._data.popitem()
+        item = self._data.popitem()
+        self._clear_deserialized_cache(item[0])
+        return item
 
     def clear(self) -> None:
         """
         Remove all items from the dictionary.
         """
+        self._clear_deserialized_cache()
         self._data.clear()
 
     def update(self, *args: typing.Any, **kwargs: typing.Any) -> None:  # pylint: disable=arguments-differ
@@ -560,7 +578,10 @@ class _MyMutableMapping(MutableMapping[str, typing.Any]):
         Update the dictionary from a mapping or an iterable of key-value pairs.
         :param any args: Either a mapping object or an iterable of key-value pairs.
         """
-        self._data.update(*args, **kwargs)
+        new_items = dict(*args, **kwargs)
+        for key in new_items:
+            self._clear_deserialized_cache(key)
+        self._data.update(new_items)
 
     @typing.overload
     def setdefault(self, key: str, default: None = None) -> None: ...
@@ -577,6 +598,8 @@ class _MyMutableMapping(MutableMapping[str, typing.Any]):
         :returns: The value for key if key is in the dictionary, else default.
         :rtype: any
         """
+        if key not in self._data:
+            self._clear_deserialized_cache(key)
         if default is _UNSET:
             return self._data.setdefault(key)
         return self._data.setdefault(key, default)
