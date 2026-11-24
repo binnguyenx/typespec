@@ -4,6 +4,8 @@
 # ------------------------------------
 import xml.etree.ElementTree as ET
 
+import pytest
+
 from typing import Literal, Optional
 
 from specialwords._utils.model_base import (
@@ -1453,3 +1455,18 @@ class TestXmlDeserializerAttribute:
         assert item.status == "unknown_value"
         assert isinstance(item.status, str)
         assert not isinstance(item.status, Status)
+
+class TestXmlSerializationErrors:
+    """Values that cannot be serialized into XML should raise a clear ValueError."""
+
+    def test_none_raises_value_error(self):
+        with pytest.raises(ValueError, match="Could not serialize value into xml: None"):
+            _get_element(None)
+
+    def test_non_string_primitive_raises_value_error(self):
+        with pytest.raises(ValueError, match="Could not serialize value into xml: 42"):
+            _get_element(42)
+
+    def test_string_primitive_raises_value_error(self):
+        with pytest.raises(ValueError, match="Could not serialize value into xml: 'abc'"):
+            _get_element("abc")

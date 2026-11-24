@@ -1759,7 +1759,7 @@ def _get_element(
             },
         )
 
-    raise ValueError("Could not serialize value into xml: " + o)
+    raise ValueError(f"Could not serialize value into xml: {o!r}")
 
 
 def _get_wrapped_element(
