@@ -1453,3 +1453,46 @@ class TestXmlDeserializerAttribute:
         assert item.status == "unknown_value"
         assert isinstance(item.status, str)
         assert not isinstance(item.status, Status)
+
+class TestXmlSerializationNoneValues:
+    """None values must not be written to XML as the literal text "None"."""
+
+    class NoneModel(Model):
+        _xml = {"name": "Data"}
+        tags: list[str] = rest_field(xml={"name": "Tags", "itemsName": "Tag"})
+        flat: list[str] = rest_field(xml={"name": "flat", "itemsName": "Item", "unwrapped": True})
+        meta: dict[str, str] = rest_field(xml={"name": "Meta"})
+        name: str = rest_field(xml={"name": "Name"})
+        kind: str = rest_field(xml={"name": "kind", "attribute": True})
+        content: str = rest_field(xml={"name": "content", "text": True})
+
+    def test_none_in_wrapped_list(self):
+        element = _get_element(self.NoneModel(tags=["a", None]))
+        assert ET.tostring(element, encoding="unicode") == "<Data><Tags><Tag>a</Tag><Tag /></Tags></Data>"
+
+    def test_none_in_unwrapped_list(self):
+        element = _get_element(self.NoneModel(flat=["a", None]))
+        assert ET.tostring(element, encoding="unicode") == "<Data><Item>a</Item><Item /></Data>"
+
+    def test_none_dict_value(self):
+        element = _get_element(self.NoneModel(meta={"k": None}))
+        assert ET.tostring(element, encoding="unicode") == "<Data><Meta><k /></Meta></Data>"
+
+    def test_none_property_set_via_mapping(self):
+        model = self.NoneModel(name="value")
+        model["name"] = None
+        assert ET.tostring(_get_element(model), encoding="unicode") == "<Data><Name /></Data>"
+
+    def test_none_attribute_is_omitted(self):
+        model = self.NoneModel(kind="value")
+        model["kind"] = None
+        assert ET.tostring(_get_element(model), encoding="unicode") == "<Data />"
+
+    def test_none_text_is_empty(self):
+        model = self.NoneModel(content="value")
+        model["content"] = None
+        assert ET.tostring(_get_element(model), encoding="unicode") == "<Data />"
+
+    def test_falsy_values_are_still_serialized(self):
+        element = _get_element(self.NoneModel(tags=["", "0"], name="", kind=""))
+        assert ET.tostring(element, encoding="unicode") == '<Data kind=""><Tags><Tag /><Tag>0</Tag></Tags><Name /></Data>'

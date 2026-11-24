@@ -1654,6 +1654,9 @@ def _set_xml_attribute(
     :param any value: The attribute value.
     :param dict prop_meta: The property metadata dictionary.
     """
+    if value is None:
+        # omit the attribute instead of writing the text "None"
+        return
     xml_name = prop_meta.get("name", name)
     _attr_ns = _get_xml_ns(prop_meta)
     if _attr_ns:
@@ -1718,7 +1721,8 @@ def _get_element(
                 wrapped_element.extend(_get_element(v, exclude_readonly, prop_meta))
             elif prop_meta.get("text", False):
                 # text could only set on primitive type
-                wrapped_element.text = _get_primitive_type_value(v)
+                if v is not None:
+                    wrapped_element.text = _get_primitive_type_value(v)
             elif prop_meta.get("attribute", False):
                 _set_xml_attribute(wrapped_element, k, v, prop_meta)
             else:
@@ -1775,7 +1779,8 @@ def _get_wrapped_element(
         wrapped_element.extend(_get_element(v, exclude_readonly, meta))
     elif _is_model(v):
         _get_element(v, exclude_readonly, meta, wrapped_element)
-    else:
+    elif v is not None:
+        # leave the element empty for None instead of writing the text "None"
         wrapped_element.text = _get_primitive_type_value(v)
     return wrapped_element  # type: ignore[no-any-return]
 
