@@ -1033,8 +1033,20 @@ class Model(_MyMutableMapping):
 
         return result
 
-    def copy(self) -> "Model":
-        return Model(self.__dict__)
+    def __copy__(self) -> Self:
+        # Give the copy its own _data so changing one model doesn't change the other.
+        new_model = self.__class__.__new__(self.__class__)
+        new_model.__dict__.update(self.__dict__)
+        new_model._data = self._data.copy()
+        return new_model
+
+    def copy(self) -> Self:
+        """Return a shallow copy of the model, like ``dict.copy()``.
+
+        :returns: A new model of the same class with the same field values.
+        :rtype: Self
+        """
+        return self.__copy__()
 
     def __new__(cls, *args: typing.Any, **kwargs: typing.Any) -> Self:
         # First time we build this class, compute its field metadata and cache it on the class.

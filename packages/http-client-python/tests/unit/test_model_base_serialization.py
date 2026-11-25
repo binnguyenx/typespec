@@ -4998,3 +4998,54 @@ def test_eq_nested_models():
         optional_myself=OptionalModel(optional_str="inner"),
     )
     assert model1 != model2_different_pet
+
+
+class _CopyInner(Model):
+    x: int = rest_field()
+
+
+class _CopyModel(Model):
+    name: str = rest_field()
+    tags: list[str] = rest_field()
+    inner: _CopyInner = rest_field()
+
+
+def _copy_source() -> _CopyModel:
+    return _CopyModel(name="a", tags=["t"], inner=_CopyInner(x=1))
+
+
+@pytest.mark.parametrize("make_copy", [lambda m: m.copy(), copy.copy], ids=["Model.copy", "copy.copy"])
+def test_shallow_copy_is_same_model_with_same_values(make_copy):
+    original = _copy_source()
+    copied = make_copy(original)
+    assert type(copied) is _CopyModel
+    assert copied == original
+    assert copied.name == "a"
+    assert copied.inner.x == 1
+    assert copied.as_dict() == {"name": "a", "tags": ["t"], "inner": {"x": 1}}
+
+
+@pytest.mark.parametrize("make_copy", [lambda m: m.copy(), copy.copy], ids=["Model.copy", "copy.copy"])
+def test_shallow_copy_does_not_share_top_level_fields(make_copy):
+    original = _copy_source()
+    copied = make_copy(original)
+    copied["name"] = "b"
+    copied.tags = ["other"]
+    del copied["inner"]
+    assert original.as_dict() == {"name": "a", "tags": ["t"], "inner": {"x": 1}}
+
+
+@pytest.mark.parametrize("make_copy", [lambda m: m.copy(), copy.copy], ids=["Model.copy", "copy.copy"])
+def test_shallow_copy_shares_nested_values_like_dict_copy(make_copy):
+    original = _copy_source()
+    copied = make_copy(original)
+    assert copied["tags"] is original["tags"]
+    assert copied.inner is original.inner
+
+
+def test_deepcopy_does_not_share_nested_values():
+    original = _copy_source()
+    copied = copy.deepcopy(original)
+    copied.tags.append("u")
+    copied.inner.x = 2
+    assert original.as_dict() == {"name": "a", "tags": ["t"], "inner": {"x": 1}}
