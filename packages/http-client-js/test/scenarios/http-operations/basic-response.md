@@ -95,7 +95,10 @@ export async function read(client: WidgetsClientContext, options?: ReadOptions):
   if (typeof options?.operationOptions?.onResponse === "function") {
     options?.operationOptions?.onResponse(response);
   }
-  if (+response.status === 200 && response.headers["content-type"]?.includes("application/json")) {
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/json"
+  ) {
     return jsonWidgetToApplicationTransform(response.body)!;
   }
   throw createRestError(response);
@@ -147,7 +150,10 @@ export async function read(
   if (typeof options?.operationOptions?.onResponse === "function") {
     options?.operationOptions?.onResponse(response);
   }
-  if (+response.status === 200 && response.headers["content-type"]?.includes("application/json")) {
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/json"
+  ) {
     return jsonWidgetToApplicationTransform(response.body)!;
   }
   if (+response.status === 204 && !response.body) {
@@ -208,11 +214,81 @@ export async function read(client: WidgetsClientContext, options?: ReadOptions):
   if (typeof options?.operationOptions?.onResponse === "function") {
     options?.operationOptions?.onResponse(response);
   }
-  if (+response.status === 200 && response.headers["content-type"]?.includes("application/json")) {
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/json"
+  ) {
     return jsonWidgetToApplicationTransform(response.body)!;
   }
-  if (+response.status === 200 && response.headers["content-type"]?.includes("application/xml")) {
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/xml"
+  ) {
     return jsonWidgetToApplicationTransform(response.body)!;
+  }
+  throw createRestError(response);
+}
+```
+
+# **Matching Response Content Types Exactly**
+
+This test verifies that the response branch is selected by comparing the media type of the `content-type` header exactly and case-insensitively, ignoring parameters. A substring match would let a header such as `application/json-patch+json`, or a parameter that mentions `application/json`, select the JSON branch.
+
+## **TypeSpec**
+
+```tsp
+@service(#{ title: "Widget Service" })
+namespace DemoService;
+
+model Row {
+  id: int32;
+}
+
+@route("/rows")
+interface Rows {
+  @get read():
+    | {
+        @header("Content-Type") contentType: "application/json";
+        @body body: Row[];
+      }
+    | {
+        @header("Content-Type") contentType: "Text/Plain; charset=utf-8";
+        @body body: string;
+      };
+}
+```
+
+## **TypeScript**
+
+### **Response Handling**
+
+The declared media types are normalized when the client is generated, and the header's media type is normalized at runtime before the comparison.
+
+```ts src/api/rowsClient/rowsClientOperations.ts function read
+export async function read(
+  client: RowsClientContext,
+  options?: ReadOptions,
+): Promise<Array<Row> | string> {
+  const path = parse("/rows").expand({});
+  const httpRequestOptions = {
+    headers: {},
+  };
+  const response = await client.pathUnchecked(path).get(httpRequestOptions);
+
+  if (typeof options?.operationOptions?.onResponse === "function") {
+    options?.operationOptions?.onResponse(response);
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/json"
+  ) {
+    return jsonArrayRowToApplicationTransform(response.body)!;
+  }
+  if (
+    +response.status === 200 &&
+    response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "text/plain"
+  ) {
+    return response.body!;
   }
   throw createRestError(response);
 }

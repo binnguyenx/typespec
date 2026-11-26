@@ -21,6 +21,22 @@ export function HttpResponse(props: HttpResponseProps) {
   );
 }
 
+/**
+ * Builds the condition that checks a response's Content-Type against the declared media type.
+ *
+ * Compares only the media type (the part before `;`, without parameters) exactly and
+ * case-insensitively. A substring match would let `application/json-patch+json`, or a header whose
+ * parameters mention `application/json`, select the `application/json` branch.
+ */
+function getContentTypeCheck(contentType: string | undefined): string {
+  if (typeof contentType !== "string") {
+    return ` && response.headers["content-type"]?.includes("${contentType}")`;
+  }
+  const mediaType = contentType.split(";")[0].trim().toLowerCase();
+  // `[0]?.` keeps the generated code valid for consumers compiling with `noUncheckedIndexedAccess`.
+  return ` && response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === ${JSON.stringify(mediaType)}`;
+}
+
 export interface HttpResponsesProps {
   httpOperation: HttpOperation;
   children?: Children;
@@ -37,9 +53,7 @@ export function HttpResponses(props: HttpResponsesProps) {
 
         let expression: Children = code`return;`;
 
-        const contentTypeCheck = body
-          ? ` && response.headers["content-type"]?.includes("${contentType}")`
-          : " && !response.body";
+        const contentTypeCheck = body ? getContentTypeCheck(contentType) : " && !response.body";
 
         if (body && (body.bodyKind === "single" || (type && !isVoidType(type)))) {
           expression = (
