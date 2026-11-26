@@ -4998,3 +4998,29 @@ def test_eq_nested_models():
         optional_myself=OptionalModel(optional_str="inner"),
     )
     assert model1 != model2_different_pet
+
+
+class _Rfc7231Model(Model):
+    when: datetime.datetime = rest_field(format="rfc7231")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(datetime.datetime(2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc), id="timezone-utc"),
+        pytest.param(
+            datetime.datetime(2024, 1, 2, 5, 4, 5, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
+            id="non-utc-offset",
+        ),
+        pytest.param(datetime.datetime(2024, 1, 2, 3, 4, 5), id="naive-treated-as-utc"),
+        pytest.param(isodate.parse_datetime("2024-01-02T03:04:05Z"), id="isodate-utc-tzinfo"),
+    ],
+)
+def test_rfc7231_serializes_any_datetime_as_gmt(value):
+    """rfc7231 must accept the same datetimes as rfc3339 and unix-timestamp, converted to GMT."""
+    expected = {"when": "Tue, 02 Jan 2024 03:04:05 GMT"}
+    assert json.loads(json.dumps(_Rfc7231Model(when=value), cls=SdkJSONEncoder)) == expected
+
+    model = _Rfc7231Model()
+    model.when = value
+    assert json.loads(json.dumps(model, cls=SdkJSONEncoder)) == expected

@@ -138,7 +138,10 @@ def _serialize_duration(td: timedelta, format: typing.Optional[str] = None):
 def _serialize_datetime(o, format: typing.Optional[str] = None):
     if hasattr(o, "year") and hasattr(o, "hour"):
         if format == "rfc7231":
-            return email.utils.format_datetime(o, usegmt=True)
+            # format_datetime(usegmt=True) only accepts datetimes whose tzinfo is timezone.utc, so treat naive
+            # datetimes as UTC and convert aware ones to UTC, like the other formats do
+            utc_datetime = o.replace(tzinfo=TZ_UTC) if not o.tzinfo else o.astimezone(TZ_UTC)
+            return email.utils.format_datetime(utc_datetime, usegmt=True)
         if format == "unix-timestamp":
             return int(calendar.timegm(o.utctimetuple()))
 
